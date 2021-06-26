@@ -1,15 +1,16 @@
-import logoImg from "../assets/images/logo.svg";
-import { Button } from "../components/Button";
-import { RoomCode } from "../components/RoomCode";
+import { FormEvent, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import "../styles/room.scss";
-import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
-import { database } from "../services/firebase";
-import { FormEvent } from "react";
+import logoImg from "../assets/images/logo.svg";
+
+import { Button } from "../components/Button";
 import { Question } from "../components/Question";
+import { RoomCode } from "../components/RoomCode";
+import { useAuth } from "../hooks/useAuth";
 import { useRoom } from "../hooks/useRoom";
+import { database } from "../services/firebase";
+
+import "../styles/room.scss";
 
 type RoomParams = {
   id: string;
@@ -18,24 +19,10 @@ type RoomParams = {
 export function Room() {
   const { user } = useAuth();
   const params = useParams<RoomParams>();
-  const roomId = params.id;
   const [newQuestion, setNewQuestion] = useState("");
-  const { title, question } = useRoom(roomId);
+  const roomId = params.id;
 
-  async function handleLikeQuestion(
-    questionId: string,
-    likeId: string | undefined
-  ) {
-    if (likeId) {
-      await database
-        .ref(`room/${roomId}/question/${questionId}/likes/${likeId}`)
-        .remove();
-    } else {
-      await database.ref(`room/${roomId}/question/${questionId}/likes`).push({
-        authorId: user?.id,
-      });
-    }
-  }
+  const { title, questions } = useRoom(roomId);
 
   async function handleSendQuestion(event: FormEvent) {
     event.preventDefault();
@@ -54,13 +41,28 @@ export function Room() {
         name: user.name,
         avatar: user.avatar,
       },
-      isHighLighted: false,
-      isAnswer: false,
+      isHighlighted: false,
+      isAnswered: false,
     };
 
-    await database.ref(`rooms/${roomId}/question`).push(question);
+    await database.ref(`rooms/${roomId}/questions`).push(question);
 
     setNewQuestion("");
+  }
+
+  async function handleLikeQuestion(
+    questionId: string,
+    likeId: string | undefined
+  ) {
+    if (likeId) {
+      await database
+        .ref(`rooms/${roomId}/questions/${questionId}/likes/${likeId}`)
+        .remove();
+    } else {
+      await database.ref(`rooms/${roomId}/questions/${questionId}/likes`).push({
+        authorId: user?.id,
+      });
+    }
   }
 
   return (
@@ -71,10 +73,11 @@ export function Room() {
           <RoomCode code={roomId} />
         </div>
       </header>
+
       <main>
         <div className="room-title">
           <h1>Sala {title}</h1>
-          {question.length > 0 && <span>{question.length} pergunta(s)</span>}
+          {questions.length > 0 && <span>{questions.length} pergunta(s)</span>}
         </div>
 
         <form onSubmit={handleSendQuestion}>
@@ -92,7 +95,7 @@ export function Room() {
               </div>
             ) : (
               <span>
-                Para enviar sua pergunta, <button>faça seu login</button>.
+                Para enviar uma pergunta, <button>faça seu login</button>.
               </span>
             )}
             <Button type="submit" disabled={!user}>
@@ -102,15 +105,15 @@ export function Room() {
         </form>
 
         <div className="question-list">
-          {question.map((question) => {
+          {questions.map((question) => {
             return (
               <Question
+                key={question.id}
                 content={question.content}
                 author={question.author}
-                key={question.id}
               >
                 <button
-                  className={`likeButton ${question.likeId ? "liked" : ""}`}
+                  className={`like-button ${question.likeId ? "liked" : ""}`}
                   type="button"
                   aria-label="Marcar como gostei"
                   onClick={() =>
